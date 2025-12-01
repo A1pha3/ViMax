@@ -507,6 +507,180 @@ import asyncio
 asyncio.run(main())
 ```
 
+### 示例 3: 使用分镜师智能体设计分镜
+
+演示如何单独使用 StoryboardArtist 智能体设计分镜脚本。
+
+#### 完整代码
+
+```python
+from agents import StoryboardArtist, CharacterExtractor
+from langchain.chat_models import init_chat_model
+from interfaces import CharacterInScene
+import asyncio
+import json
+
+async def design_storyboard_example():
+    """使用分镜师智能体设计分镜"""
+    
+    # 1. 初始化聊天模型
+    chat_model = init_chat_model(
+        model="google/gemini-2.5-flash-lite-preview-09-2025",
+        model_provider="openai",
+        api_key="YOUR_API_KEY",
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
+    # 2. 创建智能体实例
+    character_extractor = CharacterExtractor(chat_model=chat_model)
+    storyboard_artist = StoryboardArtist(chat_model=chat_model)
+    
+    # 3. 准备剧本
+    script = """
+EXT. 咖啡馆 - 下午
+
+阳光透过落地窗洒进咖啡馆。小李（25岁，男，程序员装扮）坐在角落，
+专注地看着笔记本电脑。
+
+小王（24岁，女，设计师）端着咖啡走过来。
+
+小王：（微笑）还在加班？
+
+小李：（抬头）嗨！刚好写完最后一个功能。
+
+小王：（坐下）那太好了，我们可以聊聊新项目了。
+
+小李：（合上电脑）当然，我已经迫不及待了。
+    """
+    
+    # 4. 提取角色
+    print("📋 提取角色信息...")
+    characters = await character_extractor.extract_characters(script)
+    
+    print(f"✅ 提取到 {len(characters)} 个角色：")
+    for char in characters:
+        print(f"   - {char.identifier_in_scene}: {char.static_features}")
+    
+    # 5. 设计分镜
+    print("\n🎬 设计分镜脚本...")
+    user_requirement = """
+    - 镜头风格：电影感，使用广角和特写交替
+    - 镜头数量：不超过 8 个
+    - 节奏：缓慢而富有张力
+    - 重点：展现角色之间的互动和咖啡馆的温馨氛围
+    """
+    
+    storyboard = await storyboard_artist.design_storyboard(
+        script=script,
+        characters=characters,
+        user_requirement=user_requirement
+    )
+    
+    # 6. 输出分镜结果
+    print(f"\n✅ 设计了 {len(storyboard)} 个镜头：\n")
+    for shot in storyboard:
+        print(f"镜头 {shot.idx + 1} (摄像机 {shot.cam_idx}):")
+        print(f"  视觉描述：{shot.visual_desc}")
+        print(f"  音频描述：{shot.audio_desc}")
+        print()
+    
+    # 7. 保存分镜脚本
+    with open("storyboard_output.json", "w", encoding="utf-8") as f:
+        json.dump(
+            [shot.model_dump() for shot in storyboard],
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+    
+    print("💾 分镜脚本已保存到 storyboard_output.json")
+    
+    return storyboard
+
+# 运行示例
+if __name__ == "__main__":
+    asyncio.run(design_storyboard_example())
+```
+
+#### 预期输出
+
+```
+📋 提取角色信息...
+✅ 提取到 2 个角色：
+   - 小李: 25岁男性，程序员装扮，专注工作
+   - 小王: 24岁女性，设计师，友好亲切
+
+🎬 设计分镜脚本...
+✅ 设计了 6 个镜头：
+
+镜头 1 (摄像机 0):
+  视觉描述：广角镜头，展现整个咖啡馆的温馨氛围，阳光透过落地窗洒进来
+  音频描述：轻柔的背景音乐，咖啡机的声音
+
+镜头 2 (摄像机 1):
+  视觉描述：中景镜头，小李坐在角落专注地看着笔记本电脑
+  音频描述：键盘敲击声，环境音
+
+镜头 3 (摄像机 2):
+  视觉描述：中景镜头，小王端着咖啡走向小李的桌子
+  音频描述：脚步声，咖啡杯轻微的碰撞声
+
+镜头 4 (摄像机 3):
+  视觉描述：特写镜头，小李抬头看向小王，露出微笑
+  音频描述：对话："嗨！刚好写完最后一个功能。"
+
+镜头 5 (摄像机 4):
+  视觉描述：双人镜头，小王坐下，两人开始交谈
+  音频描述：对话和轻松的氛围音
+
+镜头 6 (摄像机 3):
+  视觉描述：特写镜头，小李合上电脑，专注地看着小王
+  音频描述：笔记本合上的声音，对话继续
+
+💾 分镜脚本已保存到 storyboard_output.json
+```
+
+#### 使用场景
+
+这个示例适用于：
+
+1. **独立分镜设计**：在不生成视频的情况下，先设计分镜脚本
+2. **分镜审查**：让导演或客户审查分镜脚本后再生成视频
+3. **学习分镜设计**：理解 ViMax 如何将剧本转化为分镜
+4. **自定义分镜流程**：在分镜生成后进行手动调整
+
+#### 进阶用法
+
+```python
+# 分解详细的视觉描述
+from interfaces import ShotBriefDescription
+
+async def decompose_shot_details():
+    """为单个镜头生成详细描述"""
+    
+    storyboard_artist = StoryboardArtist(chat_model=chat_model)
+    
+    # 假设我们已经有了简要分镜描述
+    shot_brief = ShotBriefDescription(
+        idx=0,
+        is_last=False,
+        cam_idx=0,
+        visual_desc="广角镜头，展现咖啡馆的温馨氛围",
+        audio_desc="轻柔的背景音乐"
+    )
+    
+    # 分解为详细描述
+    shot_detail = await storyboard_artist.decompose_visual_description(
+        shot_brief_desc=shot_brief,
+        characters=characters
+    )
+    
+    print(f"首帧描述：{shot_detail.ff_desc}")
+    print(f"末帧描述：{shot_detail.lf_desc}")
+    print(f"运动描述：{shot_detail.motion_desc}")
+    print(f"变化程度：{shot_detail.variation_type}")
+```
+
 ---
 
 ## 自定义工具示例

@@ -149,7 +149,7 @@ api_key = os.getenv("OPENROUTER_API_KEY")
 - 如果您有明确的剧本，使用 Script2Video
 - 如果只有一个想法，使用 Idea2Video
 
-**相关文档**: [系统架构 - 流水线层](./architecture.md#流水线层-pipeline-layer)
+**相关文档**: [系统架构 - 流水线层](./architecture.md#2-流水线层-pipeline-layer)
 
 ---
 
