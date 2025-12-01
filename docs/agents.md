@@ -1834,4 +1834,526 @@ A: 智能体使用 Pydantic 模型定义输出格式，确保：
 
 ---
 
+## 完整使用示例
+
+本节提供完整的、可直接运行的代码示例，展示如何独立使用智能体或组合使用多个智能体。
+
+### 示例 1：独立使用 Screenwriter 生成故事和剧本
+
+```python
+import asyncio
+from langchain.chat_models import init_chat_model
+from agents import Screenwriter
+
+async def generate_story_and_script():
+    """完整示例：从创意生成故事和剧本"""
+    
+    # 1. 初始化聊天模型
+    chat_model = init_chat_model(
+        model="google/gemini-2.5-flash-lite-preview-09-2025",
+        model_provider="openai",
+        api_key="your-api-key",
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
+    # 2. 创建编剧智能体
+    screenwriter = Screenwriter(chat_model=chat_model)
+    
+    # 3. 定义创意
+    idea = """
+    一个年轻的程序员发现他编写的 AI 助手开始有了自己的想法，
+    并试图与他建立真正的友谊。
+    """
+    
+    user_requirement = """
+    科幻题材，适合成人观众。
+    探讨人工智能与人类情感的主题。
+    时长适合 5 分钟短片。
+    """
+    
+    # 4. 生成完整故事
+    print("📝 正在生成故事...")
+    story = await screenwriter.develop_story(
+        idea=idea,
+        user_requirement=user_requirement
+    )
+    
+    print(f"\n✅ 故事生成完成！\n")
+    print("=" * 60)
+    print(story)
+    print("=" * 60)
+    
+    # 5. 将故事转化为剧本
+    print("\n🎬 正在生成剧本...")
+    script_scenes = await screenwriter.write_script_based_on_story(
+        story=story,
+        user_requirement="分为 3 个场景"
+    )
+    
+    print(f"\n✅ 剧本生成完成！共 {len(script_scenes)} 个场景\n")
+    
+    # 6. 保存结果
+    with open("generated_story.txt", "w", encoding="utf-8") as f:
+        f.write(story)
+    
+    for i, scene_script in enumerate(script_scenes, 1):
+        with open(f"scene_{i}.txt", "w", encoding="utf-8") as f:
+            f.write(scene_script)
+        print(f"场景 {i} 已保存到 scene_{i}.txt")
+    
+    return story, script_scenes
+
+if __name__ == "__main__":
+    asyncio.run(generate_story_and_script())
+```
+
+### 示例 2：组合使用 Screenwriter 和 CharacterExtractor
+
+```python
+import asyncio
+from langchain.chat_models import init_chat_model
+from agents import Screenwriter, CharacterExtractor
+import json
+
+async def generate_script_with_characters():
+    """完整示例：生成剧本并提取角色信息"""
+    
+    # 初始化模型
+    chat_model = init_chat_model(
+        model="google/gemini-2.5-flash-lite-preview-09-2025",
+        model_provider="openai",
+        api_key="your-api-key",
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
+    # 创建智能体
+    screenwriter = Screenwriter(chat_model=chat_model)
+    character_extractor = CharacterExtractor(chat_model=chat_model)
+    
+    # 生成剧本
+    print("📝 正在生成剧本...")
+    idea = "一个侦探调查一起神秘失踪案"
+    user_requirement = "悬疑风格，3个场景"
+    
+    story = await screenwriter.develop_story(idea, user_requirement)
+    script_scenes = await screenwriter.write_script_based_on_story(
+        story, 
+        user_requirement
+    )
+    
+    # 提取每个场景的角色
+    all_characters = []
+    for i, scene_script in enumerate(script_scenes, 1):
+        print(f"\n🔍 正在提取场景 {i} 的角色...")
+        characters = await character_extractor.extract_characters(scene_script)
+        
+        print(f"场景 {i} 中的角色:")
+        for char in characters:
+            print(f"  - {char.identifier_in_scene}")
+            print(f"    静态特征: {char.static_features}")
+            print(f"    动态特征: {char.dynamic_features}")
+        
+        all_characters.extend(characters)
+    
+    # 保存结果
+    characters_data = [
+        {
+            "name": char.identifier_in_scene,
+            "static_features": char.static_features,
+            "dynamic_features": char.dynamic_features,
+            "is_visible": char.is_visible
+        }
+        for char in all_characters
+    ]
+    
+    with open("characters.json", "w", encoding="utf-8") as f:
+        json.dump(characters_data, f, ensure_ascii=False, indent=2)
+    
+    print(f"\n✅ 角色信息已保存到 characters.json")
+    
+    return script_scenes, all_characters
+
+if __name__ == "__main__":
+    asyncio.run(generate_script_with_characters())
+```
+
+### 示例 3：使用 CharacterPortraitsGenerator 生成角色画像
+
+```python
+import asyncio
+from langchain.chat_models import init_chat_model
+from agents import CharacterExtractor, CharacterPortraitsGenerator
+from tools import ImageGeneratorNanobananaGoogleAPI
+import os
+
+async def generate_character_portraits():
+    """完整示例：从剧本提取角色并生成画像"""
+    
+    # 初始化模型和工具
+    chat_model = init_chat_model(
+        model="google/gemini-2.5-flash-lite-preview-09-2025",
+        model_provider="openai",
+        api_key="your-api-key",
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
+    image_generator = ImageGeneratorNanobananaGoogleAPI(
+        api_key="your-google-api-key"
+    )
+    
+    # 创建智能体
+    character_extractor = CharacterExtractor(chat_model=chat_model)
+    portraits_generator = CharacterPortraitsGenerator(
+        image_generator=image_generator
+    )
+    
+    # 示例剧本
+    script = """
+INT. 咖啡馆 - 下午
+
+小李（25岁，男，程序员装扮，戴眼镜，短黑发）坐在角落，
+专注地看着笔记本电脑。他穿着灰色连帽衫和牛仔裤。
+
+小王（24岁，女，设计师，长棕色头发，穿着时尚的白色衬衫和黑色裤子）
+端着咖啡走过来。
+
+小王：还在加班？
+小李：（抬头）嗨！刚好写完最后一个功能。
+    """
+    
+    # 1. 提取角色
+    print("🔍 正在提取角色...")
+    characters = await character_extractor.extract_characters(script)
+    
+    print(f"✅ 提取到 {len(characters)} 个角色\n")
+    
+    # 2. 为每个角色生成画像
+    output_dir = "character_portraits"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for char in characters:
+        print(f"🎨 正在为 {char.identifier_in_scene} 生成画像...")
+        
+        # 生成前视图
+        front_portrait = await portraits_generator.generate_front_portrait(
+            character=char,
+            style="realistic"
+        )
+        front_path = f"{output_dir}/{char.identifier_in_scene}_front.png"
+        front_portrait.data.save(front_path)
+        print(f"  ✅ 前视图已保存: {front_path}")
+        
+        # 生成侧视图
+        side_portrait = await portraits_generator.generate_side_portrait(
+            character=char,
+            front_image_path=front_path
+        )
+        side_path = f"{output_dir}/{char.identifier_in_scene}_side.png"
+        side_portrait.data.save(side_path)
+        print(f"  ✅ 侧视图已保存: {side_path}")
+        
+        # 生成后视图
+        back_portrait = await portraits_generator.generate_back_portrait(
+            character=char,
+            front_image_path=front_path
+        )
+        back_path = f"{output_dir}/{char.identifier_in_scene}_back.png"
+        back_portrait.data.save(back_path)
+        print(f"  ✅ 后视图已保存: {back_path}\n")
+    
+    print(f"🎉 所有角色画像已生成完成！保存在 {output_dir}/ 目录")
+
+if __name__ == "__main__":
+    asyncio.run(generate_character_portraits())
+```
+
+### 示例 4：使用 StoryboardArtist 设计分镜
+
+```python
+import asyncio
+from langchain.chat_models import init_chat_model
+from agents import CharacterExtractor, StoryboardArtist
+import json
+
+async def design_storyboard():
+    """完整示例：为剧本设计分镜"""
+    
+    # 初始化模型
+    chat_model = init_chat_model(
+        model="google/gemini-2.5-flash-lite-preview-09-2025",
+        model_provider="openai",
+        api_key="your-api-key",
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
+    # 创建智能体
+    character_extractor = CharacterExtractor(chat_model=chat_model)
+    storyboard_artist = StoryboardArtist(chat_model=chat_model)
+    
+    # 示例剧本
+    script = """
+EXT. 公园 - 白天
+
+阳光明媚的公园里，孩子们在草地上玩耍。
+小明（8岁，男孩，穿着蓝色T恤）正在追逐一只蝴蝶。
+
+小明：（兴奋地）快看！好漂亮的蝴蝶！
+
+蝴蝶飞向一棵大树。小明跟着跑过去，但蝴蝶飞得太高了。
+
+小明：（失望地）飞走了...
+
+这时，小红（7岁，女孩，穿着粉色裙子）走过来。
+
+小红：（微笑）别难过，我们可以一起找更多蝴蝶！
+小明：（高兴起来）好啊！
+    """
+    
+    # 1. 提取角色
+    print("🔍 正在提取角色...")
+    characters = await character_extractor.extract_characters(script)
+    print(f"✅ 提取到 {len(characters)} 个角色\n")
+    
+    # 2. 设计分镜
+    print("🎬 正在设计分镜...")
+    shot_brief_descs = await storyboard_artist.design_storyboard(
+        script=script,
+        characters=characters,
+        user_requirement="不超过 8 个镜头，强调孩子们的情感变化"
+    )
+    
+    print(f"✅ 分镜设计完成！共 {len(shot_brief_descs)} 个镜头\n")
+    
+    # 3. 分解每个镜头的详细描述
+    print("📋 正在分解镜头描述...")
+    shot_descs = []
+    for i, shot_brief in enumerate(shot_brief_descs, 1):
+        print(f"  处理镜头 {i}/{len(shot_brief_descs)}...")
+        shot_desc = await storyboard_artist.decompose_visual_description(
+            shot_brief_desc=shot_brief,
+            characters=characters
+        )
+        shot_descs.append(shot_desc)
+    
+    print("\n✅ 所有镜头描述已分解完成\n")
+    
+    # 4. 显示和保存结果
+    print("=" * 60)
+    for shot_desc in shot_descs:
+        print(f"\n镜头 {shot_desc.idx}:")
+        print(f"  摄像机: {shot_desc.cam_idx}")
+        print(f"  变化程度: {shot_desc.variation_type}")
+        print(f"  首帧: {shot_desc.ff_desc}")
+        print(f"  末帧: {shot_desc.lf_desc}")
+        print(f"  运动: {shot_desc.motion_desc}")
+        print(f"  音频: {shot_desc.audio_desc}")
+    print("=" * 60)
+    
+    # 保存为 JSON
+    storyboard_data = [
+        {
+            "shot_idx": shot.idx,
+            "camera_idx": shot.cam_idx,
+            "variation_type": shot.variation_type,
+            "first_frame": shot.ff_desc,
+            "last_frame": shot.lf_desc,
+            "motion": shot.motion_desc,
+            "audio": shot.audio_desc
+        }
+        for shot in shot_descs
+    ]
+    
+    with open("storyboard.json", "w", encoding="utf-8") as f:
+        json.dump(storyboard_data, f, ensure_ascii=False, indent=2)
+    
+    print("\n💾 分镜信息已保存到 storyboard.json")
+    
+    return shot_descs
+
+if __name__ == "__main__":
+    asyncio.run(design_storyboard())
+```
+
+### 示例 5：组合多个智能体的完整工作流
+
+```python
+import asyncio
+from langchain.chat_models import init_chat_model
+from agents import (
+    Screenwriter,
+    CharacterExtractor,
+    CharacterPortraitsGenerator,
+    StoryboardArtist
+)
+from tools import ImageGeneratorNanobananaGoogleAPI
+import os
+import json
+
+async def complete_workflow():
+    """完整示例：从创意到分镜的完整工作流"""
+    
+    # 初始化模型和工具
+    print("🔧 正在初始化模型和工具...")
+    chat_model = init_chat_model(
+        model="google/gemini-2.5-flash-lite-preview-09-2025",
+        model_provider="openai",
+        api_key="your-api-key",
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
+    image_generator = ImageGeneratorNanobananaGoogleAPI(
+        api_key="your-google-api-key"
+    )
+    
+    # 创建所有需要的智能体
+    screenwriter = Screenwriter(chat_model=chat_model)
+    character_extractor = CharacterExtractor(chat_model=chat_model)
+    portraits_generator = CharacterPortraitsGenerator(
+        image_generator=image_generator
+    )
+    storyboard_artist = StoryboardArtist(chat_model=chat_model)
+    
+    # 创建输出目录
+    output_dir = "workflow_output"
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(f"{output_dir}/portraits", exist_ok=True)
+    
+    # 步骤 1：生成故事
+    print("\n📝 步骤 1/5: 生成故事...")
+    idea = "一个机器人学会了画画，并举办了自己的画展"
+    user_requirement = "温馨治愈风格，适合全年龄观众"
+    
+    story = await screenwriter.develop_story(idea, user_requirement)
+    
+    with open(f"{output_dir}/story.txt", "w", encoding="utf-8") as f:
+        f.write(story)
+    print("✅ 故事已保存")
+    
+    # 步骤 2：生成剧本
+    print("\n🎬 步骤 2/5: 生成剧本...")
+    script_scenes = await screenwriter.write_script_based_on_story(
+        story,
+        "分为 2 个场景"
+    )
+    
+    # 合并所有场景剧本
+    full_script = "\n\n".join(script_scenes)
+    with open(f"{output_dir}/script.txt", "w", encoding="utf-8") as f:
+        f.write(full_script)
+    print(f"✅ 剧本已保存（{len(script_scenes)} 个场景）")
+    
+    # 步骤 3：提取角色
+    print("\n🔍 步骤 3/5: 提取角色...")
+    characters = await character_extractor.extract_characters(full_script)
+    
+    characters_data = [
+        {
+            "name": char.identifier_in_scene,
+            "static_features": char.static_features,
+            "dynamic_features": char.dynamic_features
+        }
+        for char in characters
+    ]
+    
+    with open(f"{output_dir}/characters.json", "w", encoding="utf-8") as f:
+        json.dump(characters_data, f, ensure_ascii=False, indent=2)
+    print(f"✅ 提取到 {len(characters)} 个角色")
+    
+    # 步骤 4：生成角色画像
+    print("\n🎨 步骤 4/5: 生成角色画像...")
+    for char in characters:
+        print(f"  正在为 {char.identifier_in_scene} 生成画像...")
+        
+        # 只生成前视图（节省时间）
+        front_portrait = await portraits_generator.generate_front_portrait(
+            character=char,
+            style="cartoon"
+        )
+        
+        front_path = f"{output_dir}/portraits/{char.identifier_in_scene}_front.png"
+        front_portrait.data.save(front_path)
+        print(f"  ✅ 画像已保存")
+    
+    # 步骤 5：设计分镜
+    print("\n📋 步骤 5/5: 设计分镜...")
+    all_shot_descs = []
+    
+    for i, scene_script in enumerate(script_scenes, 1):
+        print(f"  正在为场景 {i} 设计分镜...")
+        
+        # 为每个场景设计分镜
+        shot_brief_descs = await storyboard_artist.design_storyboard(
+            script=scene_script,
+            characters=characters,
+            user_requirement="每个场景 5-8 个镜头"
+        )
+        
+        # 分解镜头描述
+        for shot_brief in shot_brief_descs:
+            shot_desc = await storyboard_artist.decompose_visual_description(
+                shot_brief_desc=shot_brief,
+                characters=characters
+            )
+            all_shot_descs.append(shot_desc)
+        
+        print(f"  ✅ 场景 {i} 完成（{len(shot_brief_descs)} 个镜头）")
+    
+    # 保存分镜信息
+    storyboard_data = [
+        {
+            "shot_idx": shot.idx,
+            "camera_idx": shot.cam_idx,
+            "first_frame": shot.ff_desc,
+            "last_frame": shot.lf_desc,
+            "motion": shot.motion_desc
+        }
+        for shot in all_shot_descs
+    ]
+    
+    with open(f"{output_dir}/storyboard.json", "w", encoding="utf-8") as f:
+        json.dump(storyboard_data, f, ensure_ascii=False, indent=2)
+    
+    # 完成
+    print("\n" + "=" * 60)
+    print("🎉 完整工作流执行完成！")
+    print(f"📁 所有输出文件保存在: {output_dir}/")
+    print("=" * 60)
+    print(f"\n生成内容:")
+    print(f"  - 故事: story.txt")
+    print(f"  - 剧本: script.txt ({len(script_scenes)} 个场景)")
+    print(f"  - 角色: characters.json ({len(characters)} 个角色)")
+    print(f"  - 画像: portraits/ 目录")
+    print(f"  - 分镜: storyboard.json ({len(all_shot_descs)} 个镜头)")
+
+if __name__ == "__main__":
+    asyncio.run(complete_workflow())
+```
+
+### 运行示例的注意事项
+
+1. **API Keys**: 将示例中的 `"your-api-key"` 替换为您的实际 API Key
+2. **依赖安装**: 确保已安装所有必要的依赖（`uv sync`）
+3. **网络连接**: 确保网络连接稳定，API 调用可能需要一些时间
+4. **输出目录**: 示例会自动创建输出目录，无需手动创建
+5. **错误处理**: 生产环境中建议添加更完善的错误处理和重试逻辑
+
+### 调试技巧
+
+如果遇到问题，可以添加日志输出：
+
+```python
+import logging
+
+# 设置日志级别
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# 为特定模块设置更详细的日志
+logging.getLogger("agents").setLevel(logging.DEBUG)
+```
+
+---
+
 **下一步**: 阅读 [核心流水线](./pipelines.md) 了解智能体如何在流水线中协作，或查看 [开发指南](./development.md) 学习如何创建自定义智能体。

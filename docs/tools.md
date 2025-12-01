@@ -1196,5 +1196,595 @@ async def generate_with_fallback(primary_generator, fallback_generator, prompt):
 
 ---
 
+## 完整使用示例
+
+本节提供完整的、可直接运行的代码示例，展示如何在实际项目中使用和自定义工具。
+
+### 示例 1：创建自定义工具配置脚本
+
+创建一个脚本来测试和验证工具配置：
+
+```python
+# test_tools_config.py
+import asyncio
+import yaml
+from tools import (
+    ImageGeneratorNanobananaGoogleAPI,
+    VideoGeneratorVeoGoogleAPI
+)
+
+async def test_image_generator():
+    """测试图像生成工具"""
+    print("🖼️  测试图像生成工具...")
+    
+    # 从配置文件读取
+    with open("configs/idea2video.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    
+    # 初始化图像生成器
+    image_gen_config = config["image_generator"]["init_args"]
+    image_generator = ImageGeneratorNanobananaGoogleAPI(
+        api_key=image_gen_config["api_key"]
+    )
+    
+    # 测试生成
+    try:
+        image_output = await image_generator.generate_single_image(
+            prompt="一只可爱的卡通猫咪",
+            reference_image_paths=[],
+            aspect_ratio="16:9"
+        )
+        print("✅ 图像生成成功！")
+        print(f"   格式: {image_output.fmt}")
+        print(f"   扩展名: {image_output.ext}")
+        
+        # 保存测试图像
+        if image_output.fmt == "pil":
+            image_output.data.save("test_image.png")
+            print("   已保存到: test_image.png")
+        
+        return True
+    except Exception as e:
+        print(f"❌ 图像生成失败: {e}")
+        return False
+
+async def test_video_generator():
+    """测试视频生成工具"""
+    print("\n🎥 测试视频生成工具...")
+    
+    # 从配置文件读取
+    with open("configs/idea2video.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    
+    # 初始化视频生成器
+    video_gen_config = config["video_generator"]["init_args"]
+    video_generator = VideoGeneratorVeoGoogleAPI(
+        api_key=video_gen_config["api_key"]
+    )
+    
+    # 测试生成
+    try:
+        video_output = await video_generator.generate_single_video(
+            prompt="一只猫在草地上奔跑",
+            reference_image_paths=[],
+            resolution="720p",
+            aspect_ratio="16:9",
+            duration=5
+        )
+        print("✅ 视频生成成功！")
+        print(f"   格式: {video_output.fmt}")
+        print(f"   扩展名: {video_output.ext}")
+        
+        return True
+    except Exception as e:
+        print(f"❌ 视频生成失败: {e}")
+        return False
+
+async def main():
+    """运行所有测试"""
+    print("=" * 60)
+    print("工具配置测试")
+    print("=" * 60)
+    
+    image_ok = await test_image_generator()
+    video_ok = await test_video_generator()
+    
+    print("\n" + "=" * 60)
+    if image_ok and video_ok:
+        print("🎉 所有工具测试通过！")
+    else:
+        print("⚠️  部分工具测试失败，请检查配置")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### 示例 2：动态切换工具
+
+创建一个支持动态切换工具的脚本：
+
+```python
+# dynamic_tool_switching.py
+import asyncio
+import yaml
+import importlib
+
+class ToolManager:
+    """工具管理器，支持动态加载和切换工具"""
+    
+    def __init__(self, config_path: str):
+        """初始化工具管理器
+        
+        Args:
+            config_path: 配置文件路径
+        """
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        
+        self.image_generator = None
+        self.video_generator = None
+    
+    def load_image_generator(self, tool_name: str = None):
+        """加载图像生成工具
+        
+        Args:
+            tool_name: 工具类路径，如果为 None 则使用配置文件中的默认值
+        """
+        if tool_name is None:
+            tool_config = self.config["image_generator"]
+            tool_name = tool_config["class_path"]
+            init_args = tool_config["init_args"]
+        else:
+            # 使用自定义工具名称，但使用配置文件中的参数
+            init_args = self.config["image_generator"]["init_args"]
+        
+        # 动态导入工具类
+        module_name, class_name = tool_name.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        tool_class = getattr(module, class_name)
+        
+        # 实例化工具
+        self.image_generator = tool_class(**init_args)
+        print(f"✅ 已加载图像生成工具: {class_name}")
+    
+    def load_video_generator(self, tool_name: str = None):
+        """加载视频生成工具
+        
+        Args:
+            tool_name: 工具类路径，如果为 None 则使用配置文件中的默认值
+        """
+        if tool_name is None:
+            tool_config = self.config["video_generator"]
+            tool_name = tool_config["class_path"]
+            init_args = tool_config["init_args"]
+        else:
+            init_args = self.config["video_generator"]["init_args"]
+        
+        # 动态导入工具类
+        module_name, class_name = tool_name.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        tool_class = getattr(module, class_name)
+        
+        # 实例化工具
+        self.video_generator = tool_class(**init_args)
+        print(f"✅ 已加载视频生成工具: {class_name}")
+    
+    async def generate_image(self, prompt: str, **kwargs):
+        """生成图像"""
+        if self.image_generator is None:
+            raise RuntimeError("图像生成工具未加载")
+        
+        return await self.image_generator.generate_single_image(
+            prompt=prompt,
+            **kwargs
+        )
+    
+    async def generate_video(self, prompt: str, **kwargs):
+        """生成视频"""
+        if self.video_generator is None:
+            raise RuntimeError("视频生成工具未加载")
+        
+        return await self.video_generator.generate_single_video(
+            prompt=prompt,
+            **kwargs
+        )
+
+async def main():
+    """演示动态工具切换"""
+    
+    # 创建工具管理器
+    manager = ToolManager("configs/idea2video.yaml")
+    
+    # 场景 1：使用默认工具
+    print("\n场景 1: 使用默认工具")
+    print("-" * 60)
+    manager.load_image_generator()
+    manager.load_video_generator()
+    
+    # 生成测试内容
+    image = await manager.generate_image(
+        prompt="一只可爱的猫咪",
+        aspect_ratio="16:9"
+    )
+    print("✅ 图像生成完成")
+    
+    # 场景 2：切换到不同的工具
+    print("\n场景 2: 切换到云雾 API 工具")
+    print("-" * 60)
+    manager.load_image_generator("tools.ImageGeneratorNanobananaYunwuAPI")
+    manager.load_video_generator("tools.VideoGeneratorVeoYunwuAPI")
+    
+    # 使用新工具生成
+    image = await manager.generate_image(
+        prompt="一只可爱的猫咪",
+        aspect_ratio="16:9"
+    )
+    print("✅ 图像生成完成（使用新工具）")
+    
+    print("\n🎉 工具切换演示完成！")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### 示例 3：创建工具性能对比脚本
+
+```python
+# benchmark_tools.py
+import asyncio
+import time
+from tools import (
+    ImageGeneratorNanobananaGoogleAPI,
+    ImageGeneratorDoubaoSeedreamYunwuAPI,
+    VideoGeneratorVeoGoogleAPI,
+    VideoGeneratorDoubaoSeedanceYunwuAPI
+)
+
+async def benchmark_image_generator(generator, name: str, prompt: str):
+    """测试图像生成器性能"""
+    print(f"\n测试 {name}...")
+    
+    start_time = time.time()
+    try:
+        image_output = await generator.generate_single_image(
+            prompt=prompt,
+            reference_image_paths=[],
+            aspect_ratio="16:9"
+        )
+        end_time = time.time()
+        
+        duration = end_time - start_time
+        print(f"✅ {name} 完成")
+        print(f"   耗时: {duration:.2f} 秒")
+        print(f"   格式: {image_output.fmt}")
+        
+        return {
+            "name": name,
+            "success": True,
+            "duration": duration,
+            "format": image_output.fmt
+        }
+    except Exception as e:
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"❌ {name} 失败: {e}")
+        print(f"   耗时: {duration:.2f} 秒")
+        
+        return {
+            "name": name,
+            "success": False,
+            "duration": duration,
+            "error": str(e)
+        }
+
+async def benchmark_video_generator(generator, name: str, prompt: str):
+    """测试视频生成器性能"""
+    print(f"\n测试 {name}...")
+    
+    start_time = time.time()
+    try:
+        video_output = await generator.generate_single_video(
+            prompt=prompt,
+            reference_image_paths=[],
+            resolution="720p",
+            aspect_ratio="16:9",
+            duration=5
+        )
+        end_time = time.time()
+        
+        duration = end_time - start_time
+        print(f"✅ {name} 完成")
+        print(f"   耗时: {duration:.2f} 秒")
+        print(f"   格式: {video_output.fmt}")
+        
+        return {
+            "name": name,
+            "success": True,
+            "duration": duration,
+            "format": video_output.fmt
+        }
+    except Exception as e:
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"❌ {name} 失败: {e}")
+        print(f"   耗时: {duration:.2f} 秒")
+        
+        return {
+            "name": name,
+            "success": False,
+            "duration": duration,
+            "error": str(e)
+        }
+
+async def main():
+    """运行性能对比测试"""
+    print("=" * 60)
+    print("工具性能对比测试")
+    print("=" * 60)
+    
+    # 测试提示词
+    image_prompt = "一只可爱的卡通猫咪，坐在草地上"
+    video_prompt = "一只猫在草地上奔跑"
+    
+    # 图像生成器对比
+    print("\n📊 图像生成器性能对比")
+    print("-" * 60)
+    
+    image_generators = [
+        (
+            ImageGeneratorNanobananaGoogleAPI(api_key="your-google-key"),
+            "Google Nanobanana"
+        ),
+        (
+            ImageGeneratorDoubaoSeedreamYunwuAPI(api_key="your-yunwu-key"),
+            "Doubao Seedream"
+        ),
+    ]
+    
+    image_results = []
+    for generator, name in image_generators:
+        result = await benchmark_image_generator(generator, name, image_prompt)
+        image_results.append(result)
+    
+    # 视频生成器对比
+    print("\n📊 视频生成器性能对比")
+    print("-" * 60)
+    
+    video_generators = [
+        (
+            VideoGeneratorVeoGoogleAPI(api_key="your-google-key"),
+            "Google Veo"
+        ),
+        (
+            VideoGeneratorDoubaoSeedanceYunwuAPI(api_key="your-yunwu-key"),
+            "Doubao Seedance"
+        ),
+    ]
+    
+    video_results = []
+    for generator, name in video_generators:
+        result = await benchmark_video_generator(generator, name, video_prompt)
+        video_results.append(result)
+    
+    # 显示汇总结果
+    print("\n" + "=" * 60)
+    print("测试结果汇总")
+    print("=" * 60)
+    
+    print("\n图像生成器:")
+    for result in image_results:
+        if result["success"]:
+            print(f"  {result['name']}: {result['duration']:.2f}秒 ✅")
+        else:
+            print(f"  {result['name']}: 失败 ❌")
+    
+    print("\n视频生成器:")
+    for result in video_results:
+        if result["success"]:
+            print(f"  {result['name']}: {result['duration']:.2f}秒 ✅")
+        else:
+            print(f"  {result['name']}: 失败 ❌")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### 示例 4：创建工具配置生成器
+
+```python
+# generate_tool_config.py
+import yaml
+from typing import Dict, Any
+
+def generate_config(
+    chat_model_key: str,
+    image_tool: str,
+    image_key: str,
+    video_tool: str,
+    video_key: str,
+    output_path: str = "configs/custom_config.yaml"
+) -> None:
+    """生成自定义工具配置文件
+    
+    Args:
+        chat_model_key: 聊天模型 API Key
+        image_tool: 图像生成工具类路径
+        image_key: 图像生成 API Key
+        video_tool: 视频生成工具类路径
+        video_key: 视频生成 API Key
+        output_path: 输出配置文件路径
+    """
+    
+    # 工具配置映射
+    tool_configs = {
+        "google_image": {
+            "class_path": "tools.ImageGeneratorNanobananaGoogleAPI",
+            "init_args": {"api_key": image_key}
+        },
+        "yunwu_image": {
+            "class_path": "tools.ImageGeneratorNanobananaYunwuAPI",
+            "init_args": {
+                "api_key": image_key,
+                "model": "gemini-2.5-flash-image-preview"
+            }
+        },
+        "doubao_image": {
+            "class_path": "tools.ImageGeneratorDoubaoSeedreamYunwuAPI",
+            "init_args": {
+                "api_key": image_key,
+                "model": "doubao-seedream-4-0-250828"
+            }
+        },
+        "google_video": {
+            "class_path": "tools.VideoGeneratorVeoGoogleAPI",
+            "init_args": {"api_key": video_key}
+        },
+        "yunwu_video": {
+            "class_path": "tools.VideoGeneratorVeoYunwuAPI",
+            "init_args": {
+                "api_key": video_key,
+                "t2v_model": "veo3-fast",
+                "ff2v_model": "veo3-fast",
+                "flf2v_model": "veo2-fast-frames"
+            }
+        },
+        "doubao_video": {
+            "class_path": "tools.VideoGeneratorDoubaoSeedanceYunwuAPI",
+            "init_args": {"api_key": video_key}
+        }
+    }
+    
+    # 构建配置
+    config = {
+        "chat_model": {
+            "init_args": {
+                "model": "google/gemini-2.5-flash-lite-preview-09-2025",
+                "model_provider": "openai",
+                "api_key": chat_model_key,
+                "base_url": "https://openrouter.ai/api/v1"
+            }
+        },
+        "image_generator": tool_configs.get(image_tool, tool_configs["google_image"]),
+        "video_generator": tool_configs.get(video_tool, tool_configs["google_video"]),
+        "working_dir": ".working_dir/custom_pipeline"
+    }
+    
+    # 保存配置
+    with open(output_path, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
+    
+    print(f"✅ 配置文件已生成: {output_path}")
+    print(f"\n配置内容:")
+    print(f"  聊天模型: Gemini 2.5 Flash")
+    print(f"  图像工具: {config['image_generator']['class_path']}")
+    print(f"  视频工具: {config['video_generator']['class_path']}")
+
+def main():
+    """交互式配置生成"""
+    print("=" * 60)
+    print("ViMax 工具配置生成器")
+    print("=" * 60)
+    
+    # 获取用户输入
+    print("\n请输入您的 API Keys:")
+    chat_key = input("聊天模型 API Key (OpenRouter): ")
+    
+    print("\n选择图像生成工具:")
+    print("  1. Google Nanobanana (推荐)")
+    print("  2. 云雾 Nanobanana")
+    print("  3. 豆包 Seedream")
+    image_choice = input("请选择 (1-3): ")
+    
+    image_tool_map = {
+        "1": "google_image",
+        "2": "yunwu_image",
+        "3": "doubao_image"
+    }
+    image_tool = image_tool_map.get(image_choice, "google_image")
+    image_key = input("图像生成 API Key: ")
+    
+    print("\n选择视频生成工具:")
+    print("  1. Google Veo (推荐)")
+    print("  2. 云雾 Veo")
+    print("  3. 豆包 Seedance")
+    video_choice = input("请选择 (1-3): ")
+    
+    video_tool_map = {
+        "1": "google_video",
+        "2": "yunwu_video",
+        "3": "doubao_video"
+    }
+    video_tool = video_tool_map.get(video_choice, "google_video")
+    video_key = input("视频生成 API Key: ")
+    
+    # 生成配置
+    print("\n正在生成配置文件...")
+    generate_config(
+        chat_model_key=chat_key,
+        image_tool=image_tool,
+        image_key=image_key,
+        video_tool=video_tool,
+        video_key=video_key
+    )
+    
+    print("\n🎉 配置生成完成！您现在可以使用以下命令测试:")
+    print("  python main_idea2video.py --config configs/custom_config.yaml")
+
+if __name__ == "__main__":
+    main()
+```
+
+### 运行示例的注意事项
+
+1. **API Keys**: 将所有示例中的 API Key 替换为您的实际密钥
+2. **依赖检查**: 确保已安装所有必要的依赖
+3. **网络连接**: 某些工具可能需要特定的网络环境
+4. **成本控制**: 性能对比测试会产生 API 调用费用，请谨慎使用
+5. **错误处理**: 生产环境中建议添加更完善的错误处理
+
+### 调试工具问题
+
+如果工具调用失败，可以使用以下调试脚本：
+
+```python
+# debug_tool.py
+import asyncio
+import logging
+
+# 启用详细日志
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+async def debug_tool():
+    """调试工具调用"""
+    from tools import ImageGeneratorNanobananaGoogleAPI
+    
+    generator = ImageGeneratorNanobananaGoogleAPI(
+        api_key="your-api-key"
+    )
+    
+    try:
+        print("开始调用工具...")
+        result = await generator.generate_single_image(
+            prompt="测试图像",
+            reference_image_paths=[],
+            aspect_ratio="16:9"
+        )
+        print(f"成功！格式: {result.fmt}")
+    except Exception as e:
+        print(f"失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(debug_tool())
+```
+
+---
+
 **更新记录**:
 - 2025-12-01: 完善工具文档，添加详细配置和使用示例
+- 2025-12-01: 添加完整的可运行示例代码

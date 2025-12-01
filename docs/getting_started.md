@@ -330,7 +330,63 @@ working_dir: .working_dir/idea2video
 
 ### 配置验证
 
-配置完成后，建议先运行一个简单的测试来验证配置是否正确：
+配置完成后，建议先运行一个简单的测试来验证配置是否正确。
+
+#### 方法 1：快速测试脚本
+
+创建一个测试脚本 `test_config.py` 来验证配置：
+
+```python
+import asyncio
+from langchain.chat_models import init_chat_model
+import yaml
+
+async def test_configuration():
+    """测试配置是否正确"""
+    print("🔍 开始测试配置...")
+    
+    # 读取配置文件
+    try:
+        with open("configs/idea2video.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        print("✅ 配置文件读取成功")
+    except Exception as e:
+        print(f"❌ 配置文件读取失败: {e}")
+        return False
+    
+    # 测试聊天模型
+    try:
+        chat_model_config = config["chat_model"]["init_args"]
+        chat_model = init_chat_model(
+            model=chat_model_config["model"],
+            model_provider=chat_model_config["model_provider"],
+            api_key=chat_model_config["api_key"],
+            base_url=chat_model_config["base_url"]
+        )
+        
+        # 发送测试消息
+        response = await chat_model.ainvoke("Say 'Hello, ViMax!'")
+        print(f"✅ 聊天模型测试成功: {response.content[:50]}...")
+    except Exception as e:
+        print(f"❌ 聊天模型测试失败: {e}")
+        return False
+    
+    print("\n🎉 所有配置测试通过！您可以开始使用 ViMax 了。")
+    return True
+
+if __name__ == "__main__":
+    asyncio.run(test_configuration())
+```
+
+运行测试：
+
+```bash
+python test_config.py
+```
+
+#### 方法 2：使用默认示例
+
+直接运行默认的示例脚本：
 
 ```bash
 # 使用默认的简短示例
@@ -339,13 +395,64 @@ python main_idea2video.py
 
 如果配置正确，程序将开始生成视频。如果遇到错误，请参阅下文的"故障排查"部分。
 
+#### 完整的环境配置示例
+
+以下是一个完整的配置和运行示例，从头到尾展示整个流程：
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/HKUDS/ViMax.git
+cd ViMax
+
+# 2. 安装 uv（如果尚未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 3. 同步依赖
+uv sync
+
+# 4. 激活虚拟环境
+source .venv/bin/activate  # Linux/macOS
+# 或
+.venv\Scripts\activate  # Windows
+
+# 5. 复制并编辑配置文件
+cp configs/idea2video.yaml configs/my_config.yaml
+# 使用文本编辑器编辑 my_config.yaml，填入您的 API Keys
+
+# 6. 创建测试脚本
+cat > quick_test.py << 'EOF'
+import asyncio
+from pipelines.idea2video_pipeline import Idea2VideoPipeline
+
+async def main():
+    pipeline = Idea2VideoPipeline.init_from_config(
+        config_path="configs/my_config.yaml"
+    )
+    
+    await pipeline(
+        idea="一只猫在追逐蝴蝶",
+        user_requirement="10秒短视频，1个场景",
+        style="Cartoon"
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
+EOF
+
+# 7. 运行测试
+python quick_test.py
+
+# 8. 查看生成的视频
+ls -lh .working_dir/idea2video/final_video.mp4
+```
+
 ## 运行示例
 
 ### 1. 创意生成视频 (Idea2Video)
 
 Idea2Video 流水线可以将一个简单的创意扩展为完整的视频。
 
-#### 步骤 1：编辑创意内容
+#### 方法 1：修改现有脚本（推荐新手）
 
 打开 `main_idea2video.py` 文件，修改以下变量：
 
@@ -370,11 +477,82 @@ style = "Cartoon"  # 可选：Cartoon, Anime, Realistic, Cyberpunk 等
 - `user_requirement`: 对视频的具体要求，如目标观众、场景数量、时长限制等
 - `style`: 视觉风格，影响图像和视频的生成效果
 
-#### 步骤 2：运行脚本
+然后运行脚本：
 
 ```bash
 # 确保在项目根目录下
 python main_idea2video.py
+```
+
+#### 方法 2：创建自定义脚本（推荐有经验用户）
+
+创建一个新的 Python 文件 `my_idea2video.py`：
+
+```python
+import asyncio
+from pipelines.idea2video_pipeline import Idea2VideoPipeline
+
+async def main():
+    # 初始化流水线（使用配置文件）
+    pipeline = Idea2VideoPipeline.init_from_config(
+        config_path="configs/idea2video.yaml"
+    )
+    
+    # 定义您的创意
+    idea = """
+    一个年轻的程序员发现他编写的 AI 助手开始有了自己的想法。
+    """
+    
+    # 定义用户需求
+    user_requirement = """
+    科幻风格，适合成人观众。
+    不超过 3 个场景，每个场景 5-8 个镜头。
+    重点展现人与 AI 的情感互动。
+    """
+    
+    # 定义视觉风格
+    style = "Cyberpunk"
+    
+    # 运行流水线
+    print("🎬 开始生成视频...")
+    await pipeline(
+        idea=idea,
+        user_requirement=user_requirement,
+        style=style
+    )
+    print("✅ 视频生成完成！")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+运行您的自定义脚本：
+
+```bash
+python my_idea2video.py
+```
+
+#### 方法 3：在 Jupyter Notebook 中使用
+
+如果您喜欢交互式开发，可以在 Jupyter Notebook 中使用：
+
+```python
+# 在 Jupyter Notebook 单元格中运行
+import asyncio
+from pipelines.idea2video_pipeline import Idea2VideoPipeline
+
+# 初始化流水线
+pipeline = Idea2VideoPipeline.init_from_config(
+    config_path="configs/idea2video.yaml"
+)
+
+# 定义参数
+idea = "一只勇敢的小老鼠拯救了整个村庄"
+user_requirement = "儿童动画风格，3个场景"
+style = "Cartoon"
+
+# 运行（在 Jupyter 中使用 await）
+await pipeline(idea=idea, user_requirement=user_requirement, style=style)
 ```
 
 #### 步骤 3：等待生成
@@ -393,7 +571,7 @@ python main_idea2video.py
 
 如果您已有完整的剧本，可以直接使用 Script2Video 流水线。
 
-#### 步骤 1：准备剧本
+#### 方法 1：修改现有脚本
 
 打开 `main_script2video.py` 文件，编辑剧本内容：
 
@@ -426,14 +604,99 @@ style = "Anime Style"
 - 角色对话（Dialogue）：`角色名: 对话内容`
 - 角色介绍：在首次出现时用括号说明角色特征
 
-#### 步骤 2：配置文件
-
-确保 `configs/script2video.yaml` 已正确配置 API Key。
-
-#### 步骤 3：运行脚本
+然后运行脚本：
 
 ```bash
 python main_script2video.py
+```
+
+#### 方法 2：创建自定义脚本
+
+创建一个新的 Python 文件 `my_script2video.py`：
+
+```python
+import asyncio
+from pipelines.script2video_pipeline import Script2VideoPipeline
+
+async def main():
+    # 初始化流水线
+    pipeline = Script2VideoPipeline.init_from_config(
+        config_path="configs/script2video.yaml"
+    )
+    
+    # 您的剧本（中文示例）
+    script = """
+INT. 咖啡馆 - 下午
+
+阳光透过落地窗洒进咖啡馆。小李（25岁，男，程序员装扮）坐在角落，
+专注地看着笔记本电脑。小王（24岁，女，设计师）端着咖啡走过来。
+
+小王：（微笑）还在加班？
+小李：（抬头）嗨！刚好写完最后一个功能。
+小王：（坐下）那太好了，我们可以聊聊新项目了。
+小李：（合上电脑）当然，我已经迫不及待了。
+    """
+    
+    # 用户需求
+    user_requirement = """
+    现代都市风格，节奏轻快。
+    不超过 10 个镜头。
+    重点展现角色之间的互动和咖啡馆的温馨氛围。
+    """
+    
+    # 视觉风格
+    style = "Realistic"
+    
+    # 运行流水线
+    print("🎬 开始从剧本生成视频...")
+    await pipeline(
+        script=script,
+        user_requirement=user_requirement,
+        style=style
+    )
+    print("✅ 视频生成完成！")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+运行脚本：
+
+```bash
+python my_script2video.py
+```
+
+#### 方法 3：从文件读取剧本
+
+如果您的剧本保存在文件中，可以这样读取：
+
+```python
+import asyncio
+from pipelines.script2video_pipeline import Script2VideoPipeline
+
+async def main():
+    # 初始化流水线
+    pipeline = Script2VideoPipeline.init_from_config(
+        config_path="configs/script2video.yaml"
+    )
+    
+    # 从文件读取剧本
+    with open("my_script.txt", "r", encoding="utf-8") as f:
+        script = f.read()
+    
+    # 定义参数
+    user_requirement = "不超过 20 个镜头，节奏紧凑"
+    style = "Cinematic"
+    
+    # 运行流水线
+    await pipeline(
+        script=script,
+        user_requirement=user_requirement,
+        style=style
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### 3. 监控运行进度
