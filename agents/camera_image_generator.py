@@ -66,13 +66,15 @@ human_prompt_template_select_reference_camera = \
 
 
 class CameraParentItem(BaseModel):
-    parent_cam_idx: int = Field(
-        description="The index of the parent camera.",
-        examples=[0, 1],
+    parent_cam_idx: Optional[int] = Field(
+        default=None,
+        description="The index of the parent camera. None if this is the root camera.",
+        examples=[0, 1, None],
     )
-    parent_shot_idx: int = Field(
-        description="The index of the dependent shot.",
-        examples=[0, 3],
+    parent_shot_idx: Optional[int] = Field(
+        default=None,
+        description="The index of the dependent shot. None if this is the root camera.",
+        examples=[0, 3, None],
     )
     reason: str = Field(
         description="The reason for the selection of the parent camera.",
