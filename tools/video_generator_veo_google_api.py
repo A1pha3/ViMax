@@ -88,21 +88,6 @@ class VideoGeneratorVeoGoogleAPI:
             operation = self.client.operations.get(operation)
             logging.info(f"Video generation not completed, waiting 2 seconds...")
 
-<<<<<<< HEAD
-        # 检查 API 响应是否有效
-        if operation.response is None:
-            error_msg = f"视频生成失败：API 返回空响应。操作详情: {operation}"
-            logging.error(error_msg)
-            raise RuntimeError(error_msg)
-        
-        if operation.response.generated_videos is None or len(operation.response.generated_videos) == 0:
-            # 尝试获取更多错误信息
-            error_details = getattr(operation, 'error', None)
-            error_msg = f"视频生成失败：没有生成任何视频。"
-            if error_details:
-                error_msg += f" 错误详情: {error_details}"
-            error_msg += f" 完整响应: {operation.response}"
-=======
         # Check if operation completed successfully
         if operation.error:
             error_msg = f"Video generation failed: {operation.error}"
@@ -116,7 +101,6 @@ class VideoGeneratorVeoGoogleAPI:
 
         if not hasattr(operation.response, 'generated_videos') or not operation.response.generated_videos:
             error_msg = "Video generation completed but no videos were generated"
->>>>>>> upstream/main
             logging.error(error_msg)
             raise RuntimeError(error_msg)
 
