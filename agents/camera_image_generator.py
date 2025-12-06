@@ -66,28 +66,31 @@ human_prompt_template_select_reference_camera = \
 
 
 class CameraParentItem(BaseModel):
-    parent_cam_idx: Optional[int] = Field(
-        default=None,
-        description="The index of the parent camera. None if this is the root camera.",
-        examples=[0, 1, None],
+    parent_cam_idx: Optional[int] = Field( 
+        default=None, 
+        description="The index of the parent camera. Set to None if the camera has no parent (e.g., for a root camera).",
+        examples=[0, 1, None], 
     )
-    parent_shot_idx: Optional[int] = Field(
-        default=None,
-        description="The index of the dependent shot. None if this is the root camera.",
-        examples=[0, 3, None],
+    parent_shot_idx: Optional[int] = Field( 
+        default=None, 
+        description="The index of the dependent shot. Set to None if the camera has no parent (e.g., for a root camera).",
+        examples=[0, 3, None], 
     )
     reason: str = Field(
-        description="The reason for the selection of the parent camera.",
+        description="The reason for the selection of the parent camera. If the camera has no parent, it should explain why it's a root camera.",
         examples=[
             "The parent shot's field of view covers the child shot's field of view (from medium shot to close-up)",
             "The parent shot and the child shot have a shot/reverse shot relationship.",
+            "CAMERA_0 (Shot 0) establishes the entire scene and contains all characters and the setting. It is the root camera." # 补充 LLM 实际输出的例子
         ],
     )
-    is_parent_fully_covers_child: bool = Field(
-        description="Whether the parent camera fully covers the child camera's content.",
-        examples=[True, False],
+    is_parent_fully_covers_child: Optional[bool] = Field( 
+        default=None, 
+        description="Whether the parent camera fully covers the child camera's content. Set to None if the camera has no parent.",
+        examples=[True, False, None], 
     )
     missing_info: Optional[str] = Field(
+        default=None,
         description="The missing elements in the child shot that are not covered by the parent shot. If the parent shot fully covers the child shot, set this to None.",
         examples=[
             "The frontal view of Alice.",

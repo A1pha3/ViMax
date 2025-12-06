@@ -1,9 +1,11 @@
 import logging
-from typing import List
+from typing import List, Optional
 import asyncio
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError
 from interfaces.video_output import VideoOutput
+from utils.rate_limiter import RateLimiter
 
 # https://ai.google.dev/gemini-api/docs/video-generation?hl=zh-cn
 
@@ -15,11 +17,13 @@ class VideoGeneratorVeoGoogleAPI:
         t2v_model: str = "veo-3.1-generate-preview",
         ff2v_model: str = "veo-3.1-generate-preview",
         flf2v_model: str = "veo-3.1-generate-preview",
+        rate_limiter: Optional[RateLimiter] = None,
     ):
         self.api_key = api_key
         self.t2v_model = t2v_model
         self.ff2v_model = ff2v_model
         self.flf2v_model = flf2v_model
+        self.rate_limiter = rate_limiter
 
         self.client = genai.Client(
             api_key=api_key,
@@ -56,16 +60,35 @@ class VideoGeneratorVeoGoogleAPI:
 
         logging.info(f"Calling {params['model']} to generate video...")
 
-        operation = self.client.models.generate_videos(
-            **params,
-            config=types.GenerateVideosConfig(**config_params),
-        )
+        # Apply rate limiting if configured
+        if self.rate_limiter:
+            await self.rate_limiter.acquire()
+
+        # Retry logic for rate limit errors
+        max_retries = 3
+        retry_delay = 5
+
+        for attempt in range(max_retries):
+            try:
+                operation = self.client.models.generate_videos(
+                    **params,
+                    config=types.GenerateVideosConfig(**config_params),
+                )
+                break
+            except ClientError as e:
+                if e.status_code == 429 and attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    logging.warning(f"Rate limit hit (429), retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
 
         while not operation.done:
             await asyncio.sleep(2)
             operation = self.client.operations.get(operation)
             logging.info(f"Video generation not completed, waiting 2 seconds...")
 
+<<<<<<< HEAD
         # 检查 API 响应是否有效
         if operation.response is None:
             error_msg = f"视频生成失败：API 返回空响应。操作详情: {operation}"
@@ -79,6 +102,21 @@ class VideoGeneratorVeoGoogleAPI:
             if error_details:
                 error_msg += f" 错误详情: {error_details}"
             error_msg += f" 完整响应: {operation.response}"
+=======
+        # Check if operation completed successfully
+        if operation.error:
+            error_msg = f"Video generation failed: {operation.error}"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        if not operation.response:
+            error_msg = "Video generation completed but no response received"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        if not hasattr(operation.response, 'generated_videos') or not operation.response.generated_videos:
+            error_msg = "Video generation completed but no videos were generated"
+>>>>>>> upstream/main
             logging.error(error_msg)
             raise RuntimeError(error_msg)
 
