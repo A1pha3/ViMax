@@ -76,7 +76,7 @@ class VideoGeneratorVeoGoogleAPI:
                 )
                 break
             except ClientError as e:
-                if e.status_code == 429 and attempt < max_retries - 1:
+                if e.code == 429 and attempt < max_retries - 1:
                     wait_time = retry_delay * (2 ** attempt)
                     logging.warning(f"Rate limit hit (429), retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
                     await asyncio.sleep(wait_time)
@@ -100,7 +100,23 @@ class VideoGeneratorVeoGoogleAPI:
             raise RuntimeError(error_msg)
 
         if not hasattr(operation.response, 'generated_videos') or not operation.response.generated_videos:
-            error_msg = "Video generation completed but no videos were generated"
+            # Log detailed response info to help diagnose the issue
+            logging.error(f"Response object: {operation.response}")
+            logging.error(f"Response type: {type(operation.response)}")
+            
+            # Try to get more details from the response
+            response_attrs = [attr for attr in dir(operation.response) if not attr.startswith('_')]
+            logging.error(f"Response attributes: {response_attrs}")
+            
+            # Check for potential content moderation or filtering
+            if hasattr(operation.response, 'filtered_reason'):
+                logging.error(f"Filtered reason: {operation.response.filtered_reason}")
+            if hasattr(operation.response, 'block_reason'):
+                logging.error(f"Block reason: {operation.response.block_reason}")
+            if hasattr(operation.response, 'safety_ratings'):
+                logging.error(f"Safety ratings: {operation.response.safety_ratings}")
+            
+            error_msg = f"Video generation completed but no videos were generated. Response: {operation.response}"
             logging.error(error_msg)
             raise RuntimeError(error_msg)
 
